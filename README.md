@@ -9,5 +9,8 @@ designing their levels in the Bumper Engine, as, at the time of this writing,
 the base Bumper Engine package only comes with two usable enemy prefabs: a
 Motobug and a GUN Beetle.
 
+Modifications to other scripts in the Bumper Engine are included here as well,
+as the prefabs may rely on these modifications (such as with EnemyHealth.cs).
+
 Current enemy prefabs include:
- * Generic Egg Pawn (Generations, WIP)
+ * Generic Egg Pawn (Generations)

@@ -12,24 +12,36 @@ public class GenEggPawnControl : MonoBehaviour {
 	public float playerNoticeDistance;
 	public float playerLoseDistance;
 	public float playerAttackDistance;
-	public float playerHitDistance;
 	public float speed;
 	public GameObject hitCollision;
 
 	private GameObject playerObj;
 	private Transform player;
-	private EnemyBhysics physics;
-	private Rigidbody rb;
+	private GenEggPawnMovement moveController;
+	private HurtControl hurtControl;
 
-	void Awake() {
-		playerObj = GameObject.FindGameObjectWithTag("Player");
+	void Start() {
+		var pobjs = GameObject.FindGameObjectsWithTag("Player");
+		foreach (GameObject p in pobjs) {
+			if (p.name == "CharacterCapsule")
+				continue;
+			playerObj = p;
+			break;
+		}
 		player = playerObj.transform;
-		physics = GetComponent<EnemyBhysics>();
-		rb = GetComponent<Rigidbody>();
 		hitCollision.SetActive(false);
+		moveController = GetComponentInChildren<GenEggPawnMovement>();
+		hurtControl = playerObj.GetComponent<HurtControl>();
+
+		// set speed
+		moveController.speed = speed;
 	}
 
 	void FixedUpdate() {
+		// already dead, don't do anything
+		if (anim.GetNextAnimatorStateInfo(0).IsName("Dead"))
+			return;
+
 		switch (state) {
 			case GenEggPawnBehavior.Seek:
 				SeekDo();
@@ -56,8 +68,8 @@ public class GenEggPawnControl : MonoBehaviour {
 		// keep checking the distance between player and enemy
 		float dist = Vector3.Distance(transform.position, player.position);
 
-		Debug.Log("Current distance: " + dist);
-		Debug.Log("Player Object Name: " + player.name);
+		//Debug.Log("Current distance: " + dist);
+		//Debug.Log("Player Object Name: " + player.name);
 
 		// transition to next state if player is within range
 		if (dist < playerNoticeDistance) {
@@ -77,22 +89,21 @@ public class GenEggPawnControl : MonoBehaviour {
 	}
 
 	void ChaseDo() {
-		rotateTowardsPlayer();
-
-		// move towards player (taken from MotobugControl)
-		var dir = player.position - transform.position;
-		dir.y = 0; 	// don't take changes on Y-Axis into account
-		physics.AddVelocity(dir.normalized * speed);
-		Debug.Log("Current velocity: "  + rb.velocity);
-
-		
+		// movement is handled in GenEggPawnMovement.cs, this only handles state transitions
 		float dist = Vector3.Distance(player.position, transform.position);
+
+		// it's important we check this first
+		if (hurtControl.IsHurt) {	// player just got hurt, do a victory animation
+			changeState(GenEggPawnBehavior.Dance);
+			anim.SetBool("Successful Hit", true);
+		}
 
 		// check if player is too far away, if so, transition
 		// back to seek
 		if (dist > playerLoseDistance) {
 			changeState(GenEggPawnBehavior.Seek);
 			anim.SetBool("Player Spotted", false);
+			CancelInvoke();				// stop repeating movement methods
 		}
 
 		// check if the player is within attacking range, if
@@ -100,6 +111,7 @@ public class GenEggPawnControl : MonoBehaviour {
 		if (dist < playerAttackDistance) {
 			changeState(GenEggPawnBehavior.Attack);
 			anim.SetBool("Attack Range", true);
+			CancelInvoke();
 		}
 	}
 
@@ -114,6 +126,11 @@ public class GenEggPawnControl : MonoBehaviour {
 			hitCollision.SetActive(false);
 		}
 
+		if (hurtControl.IsHurt) {	// player just got hurt, do a victory animation
+			changeState(GenEggPawnBehavior.Dance);
+			anim.SetBool("Successful Hit", true);
+		}
+
 		if (dist > playerLoseDistance) {			// out of chasing distance
 			changeState(GenEggPawnBehavior.Seek);
 			anim.SetBool("Attack Range", false);
@@ -125,7 +142,22 @@ public class GenEggPawnControl : MonoBehaviour {
 	}
 
 	void DanceDo() {
+		AnimatorStateInfo animInfo = anim.GetCurrentAnimatorStateInfo(0);
 
+		if (!animInfo.IsName("Dance")) {
+			float dist = Vector3.Distance(player.position, transform.position);
+
+			if (dist > playerLoseDistance) {			// out of chasing distance
+				changeState(GenEggPawnBehavior.Seek);
+				anim.SetBool("Successful Hit", false);
+				anim.SetBool("Attack Range", false);
+				anim.SetBool("Player Spotted", false);
+			} else if (dist > playerAttackDistance) {	// out of attack distance but not chasing distance
+				changeState(GenEggPawnBehavior.Chase);
+				anim.SetBool("Successful Hit", false);
+				anim.SetBool("Attack Range", false);
+			}
+		}
 	}
 
 	void changeState(GenEggPawnBehavior g) {
@@ -135,7 +167,7 @@ public class GenEggPawnControl : MonoBehaviour {
 	private void rotateTowardsPlayer() {
 		// face player (taken from MotobugControl)
 		// NOTE: we use the parent gameobject's transform
-		// becausemodels ripped from Gens are rotated 90 
+		// because models ripped from Gens are rotated 90 
 		// degrees and I was too lazy to fix that
 		var dir = player.position - transform.position;
 		dir.y = 0;
